@@ -10,7 +10,6 @@ require(pROC)
 require(Hmisc)
 require(glmnet)
 require(randomForest)
-require(nnet)
 require(gbm)
 
 # Let's build a sample data set
@@ -117,7 +116,7 @@ df_text_terms_txf <- data.table(pt_id = df_text_terms$pt_id,
 training <- createDataPartition(df$Y, p=0.75, list=FALSE)[,1]
 testing <- (1:nrow(df))[-training]
 
-# do some variable selection on the text data?
+# do some variable selection on the text data
 x <- df_text_terms_txf[pt_id %in% df[training]$pt_id] # just using TRAINING DATA!!!
 x <- x[order(pt_id)]
 y <- df[training]$Y
@@ -154,8 +153,6 @@ fitControl <- trainControl(
 
 # set tuning grid for each model type for which it's needed
 rfGrid <- data.frame(mtry = 5:15)
-nnGrid <- expand.grid(size = c(5,10,15,20), 
-                      decay = c(0.001, 0.005, 0.01, 0.1))
 gbmGrid <- expand.grid(n.trees = c(100, 250, 500),
                        interaction.depth = c(5,10,15,20),
                        shrinkage = c(0.005, 0.01),
@@ -219,18 +216,6 @@ gbm.unstr <- train(as.numeric(Y) ~ .,
                   trControl = fitControl,
                   data = df[training])
 
-# Neural networks
-nn.str <- train(as.numeric(Y) ~ ., 
-                 method = 'nnet',
-                 tuneGrid = nnGrid,
-                 trControl = fitControl,
-                 data = df[training,var_names_struct,with=F])
-nn.unstr <- train(as.numeric(Y) ~ ., 
-                   method = 'nnet',
-                   tuneGrid = nnGrid,
-                   trControl = fitControl,
-                   data = df[training])
-
 # generate predictions on hold-out test set
 
 # a helper function to make predicted probabilities in useful range
@@ -245,14 +230,12 @@ lr.str.preds <- fix_range(predict(lr.str, df[testing]))
 en.str.preds <- fix_range(predict(en.str, df[testing]))
 rf.str.preds <- fix_range(predict(rf.str, df[testing]))
 gbm.str.preds <- fix_range(predict(gbm.str, df[testing]))
-nn.str.preds <- fix_range(predict(nn.str, df[testing]))
 
 ## structured + unstructured data models
 lr.unstr.preds <- fix_range(predict(lr.unstr, df[testing]))
 en.unstr.preds <- fix_range(predict(en.unstr, df[testing]))
 rf.unstr.preds <- fix_range(predict(rf.unstr, df[testing]))
 gbm.unstr.preds <- fix_range(predict(gbm.unstr, df[testing]))
-nn.unstr.preds <- fix_range(predict(nn.unstr, df[testing]))
 
 # generate ROC data for each model
 ## structured data models
@@ -260,18 +243,16 @@ lr.str.roc <- roc(predictor = lr.str.preds, response = df[testing]$Y, ci = TRUE)
 en.str.roc <- roc(predictor = en.str.preds, response = df[testing]$Y, ci = TRUE)
 rf.str.roc <- roc(predictor = rf.str.preds, response = df[testing]$Y, ci = TRUE)
 gbm.str.roc <- roc(predictor = gbm.str.preds, response = df[testing]$Y, ci = TRUE)
-nn.str.roc <- roc(predictor = nn.str.preds, response = df[testing]$Y, ci = TRUE)
 
 ## structured + unstructured data models
 lr.unstr.roc <- roc(predictor = lr.unstr.preds, response = df[testing]$Y, ci = TRUE)
 en.unstr.roc <- roc(predictor = en.unstr.preds, response = df[testing]$Y, ci = TRUE)
 rf.unstr.roc <- roc(predictor = rf.unstr.preds, response = df[testing]$Y, ci = TRUE)
 gbm.unstr.roc <- roc(predictor = gbm.unstr.preds, response = df[testing]$Y, ci = TRUE)
-nn.unstr.roc <- roc(predictor = nn.unstr.preds, response = df[testing]$Y, ci = TRUE)
 
 # make two-panel roc plot
 par(mfrow = c(1,2))
-plot_cols <- c('red', 'blue','forest green', 'dark orange', 'purple')
+plot_cols <- c('red', 'blue','forest green', 'dark orange')
 
 # Plot structured group
 plot(lr.str.roc, print.auc = TRUE, print.auc.cex = 0.8, col = plot_cols[1], 
@@ -279,8 +260,7 @@ plot(lr.str.roc, print.auc = TRUE, print.auc.cex = 0.8, col = plot_cols[1],
 plot(en.str.roc, col = plot_cols[2], add = TRUE, print.auc = TRUE, print.auc.cex = 0.8, print.auc.y = 0.45)
 plot(rf.str.roc, col = plot_cols[3], add = TRUE, print.auc = TRUE, print.auc.cex = 0.8, print.auc.y = 0.40)
 plot(gbm.str.roc, col = plot_cols[4], add = TRUE, print.auc = TRUE, print.auc.cex = 0.8, print.auc.y = 0.35)
-plot(nn.str.roc, col = plot_cols[5], add = TRUE, print.auc = TRUE, print.auc.cex = 0.8, print.auc.y = 0.30)
-legend('bottomright', legend = c('LR', 'EN', 'RF', 'GBM','NN'), bty = 'n',
+legend('bottomright', legend = c('LR', 'EN', 'RF', 'GBM'), bty = 'n',
        col = plot_cols, lwd = 2, cex = .8, y.intersp = 0.5, seg.len = 1)
 
 # plot structured + unstructured group
@@ -289,7 +269,6 @@ plot(lr.unstr.roc, print.auc = TRUE, print.auc.cex = 0.8, col = plot_cols[1],
 plot(en.unstr.roc, col = plot_cols[2], add = TRUE, print.auc = TRUE, print.auc.cex = 0.8, print.auc.y = 0.45)
 plot(rf.unstr.roc, col = plot_cols[3], add = TRUE, print.auc = TRUE, print.auc.cex = 0.8, print.auc.y = 0.40)
 plot(gbm.unstr.roc, col = plot_cols[4], add = TRUE, print.auc = TRUE, print.auc.cex = 0.8, print.auc.y = 0.35)
-plot(nn.unstr.roc, col = plot_cols[5], add = TRUE, print.auc = TRUE, print.auc.cex = 0.8, print.auc.y = 0.30)
-legend('bottomright', legend = c('LR', 'EN', 'RF', 'GBM','NN'), bty = 'n',
+legend('bottomright', legend = c('LR', 'EN', 'RF', 'GBM'), bty = 'n',
        col = plot_cols, lwd = 2, cex = .8, y.intersp = 0.5, seg.len = 1)
 
